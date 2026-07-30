@@ -43,12 +43,9 @@ def load_population_data():
     df_latest['시군구코드'] = df_latest['코드'].str[:5]
     
     # 3. 전체 인구('계_') 및 65세 이상 인구 열 선별
-    # '계_'로 시작하는 모든 나이별 열 추출
     total_age_cols = [c for c in df_latest.columns if c.startswith('계_')]
     
-    # 65세 이상에 해당하는 '계_' 열만 선별
     def is_elderly_col(col_name):
-        # '계_65세' -> '65' 또는 '계_100세 이상' -> '100'
         age_str = col_name.replace('계_', '').replace('세', '').replace(' 이상', '').strip()
         if age_str.isdigit() and int(age_str) >= 65:
             return True
@@ -57,7 +54,6 @@ def load_population_data():
     elderly_age_cols = [c for c in total_age_cols if is_elderly_col(c)]
     
     # 4. 시군구 단위로 그룹화하여 인구수 합산
-    # 시도명, 시군구명은 각 시군구코드의 첫 번째 값(first)으로 대표 설정
     sigungu_summary = df_latest.groupby('시군구코드').agg(
         시도=('시도', 'first'),
         시군구=('시군구', 'first')
@@ -92,7 +88,6 @@ st.write(f"📌 **데이터 기준 연도:** {latest_year}년")
 # -----------------------------------------------------------------------------
 # 3. Plotly 지도 시각화 (단계구분도)
 # -----------------------------------------------------------------------------
-# 5단계 색상 팔레트 (옅은 파란색 -> 진한 파란색)
 color_map = {
     '19% 미만': '#eff3ff',
     '19% 이상 ~ 23% 미만': '#bdd7e7',
@@ -103,16 +98,15 @@ color_map = {
 
 category_order = ['19% 미만', '19% 이상 ~ 23% 미만', '23% 이상 ~ 28% 미만', '28% 이상 ~ 38% 미만', '38% 이상']
 
-# Choropleth 지도 생성
 fig = px.choropleth(
     df_map,
     geojson=geojson_data,
     locations='시군구코드',
-    featureidkey='properties.코드',  # GeoJSON의 5자리 '코드' 속성과 매칭
+    featureidkey='properties.코드',
     color='구간',
     color_discrete_map=color_map,
     category_orders={'구간': category_order},
-    hover_name='시군구',             # 마우스 올렸을 때 제목으로 표시
+    hover_name='시군구',
     hover_data={
         '시군구코드': False,
         '시도': True,
@@ -128,7 +122,6 @@ fig = px.choropleth(
     }
 )
 
-# 지도 배경 타일 없애고 대한민국 영역에 맞추기
 fig.update_geos(fitbounds="locations", visible=False)
 
 fig.update_layout(
@@ -138,11 +131,50 @@ fig.update_layout(
     legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.01)
 )
 
-# Streamlit에 지도 표시
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------------------------------------------------------
-# 4. 하단 고령화율 상위/하위 10개 지역 표
+# 4. 지도 하단 고령화 상위 지역 핵심 요약 카운터 (추가된 기능)
+# -----------------------------------------------------------------------------
+st.markdown("---")
+st.subheader("📊 고령화 상위 지역 핵심 요약")
+
+# 상위 3개 지역 계산
+top3_df = df_map.sort_values(by='고령화율', ascending=False).head(3).reset_index(drop=True)
+national_avg = (df_map['65세이상인구'].sum() / df_map['총인구'].sum() * 100)
+
+# 카드 형태로 상위 3개 지역 및 전국 평균 표시
+m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
+with m_col1:
+    st.metric(
+        label="🇰🇷 전국 평균 고령화율",
+        value=f"{national_avg:.2f}%"
+    )
+
+with m_col2:
+    st.metric(
+        label=f"🥇 1위: {top3_df.loc[0, '시도']} {top3_df.loc[0, '시군구']}",
+        value=f"{top3_df.loc[0, '고령화율']:.2f}%",
+        delta=f"전국 평균 대비 +{(top3_df.loc[0, '고령화율'] - national_avg):.2f}%p"
+    )
+
+with m_col3:
+    st.metric(
+        label=f"🥈 2위: {top3_df.loc[1, '시도']} {top3_df.loc[1, '시군구']}",
+        value=f"{top3_df.loc[1, '고령화율']:.2f}%",
+        delta=f"전국 평균 대비 +{(top3_df.loc[1, '고령화율'] - national_avg):.2f}%p"
+    )
+
+with m_col4:
+    st.metric(
+        label=f"🥉 3위: {top3_df.loc[2, '시도']} {top3_df.loc[2, '시군구']}",
+        value=f"{top3_df.loc[2, '고령화율']:.2f}%",
+        delta=f"전국 평균 대비 +{(top3_df.loc[2, '고령화율'] - national_avg):.2f}%p"
+    )
+
+# -----------------------------------------------------------------------------
+# 5. 하단 고령화율 상위/하위 10개 지역 상세 표
 # -----------------------------------------------------------------------------
 st.markdown("---")
 
